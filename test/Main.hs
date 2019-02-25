@@ -45,7 +45,7 @@ instance MerkleHash (Cryptonite.Digest Cryptonite.SHA256) where
 
 instance MerkleHash MockDigest where
     emptyHash      = minBound
-    hashLeaf k v   = Mock.xxHash' (convert k)  + Mock.xxHash' (convert v)
+    hashLeaf k v   = Mock.xxHash' (convert k <> convert v)
     hashNode d1 d2 = d1 + d2
 
 instance MonadFail Gen where
