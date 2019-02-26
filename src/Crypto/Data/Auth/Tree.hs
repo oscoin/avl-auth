@@ -35,7 +35,6 @@ module Crypto.Data.Auth.Tree
 
 import           Crypto.Data.Auth.Tree.Internal
 
-import           Crypto.Hash (Digest, HashAlgorithm)
 import           Data.Binary (Binary)
 import           Data.ByteArray (ByteArrayAccess)
 
@@ -89,12 +88,12 @@ instance (Binary k, Binary v) => Binary (Tree k v)
 
 -- | Compute the merkle hash of a tree.
 merkleHash
-    :: (HashAlgorithm a, ByteArrayAccess k, ByteArrayAccess v)
+    :: (MerkleHash h, ByteArrayAccess k, ByteArrayAccess v)
     => Tree k v
-    -> Digest a
+    -> h
 merkleHash Empty        = emptyHash
 merkleHash (Leaf k v)   = hashLeaf k v
-merkleHash (Node _ l r) = hashNode (merkleHash l) (merkleHash r)
+merkleHash (Node _ l r) = concatHashes (merkleHash l) (merkleHash r)
 
 -------------------------------------------------------------------------------
 

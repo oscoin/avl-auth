@@ -1,15 +1,20 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Main (main) where
 
 import           Prelude hiding (length)
 import qualified Prelude
 
+
 import           Control.Monad.Fail
-import           Data.ByteArray (ByteArrayAccess(..))
+import           Data.ByteArray (ByteArrayAccess(..), convert)
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import           Data.Either (isLeft, isRight)
+import           Data.Kind
 import           Data.List (sort)
 import           Data.List.NonEmpty (NonEmpty, toList)
 import           Data.Maybe (isNothing)
+import           Data.Proxy
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Word
@@ -20,11 +25,28 @@ import           Test.Tasty.QuickCheck
 
 import           Crypto.Data.Auth.Tree (Tree)
 import qualified Crypto.Data.Auth.Tree as Tree
+import qualified Crypto.Data.Auth.Tree.Cryptonite as Cryptonite
+import           Crypto.Data.Auth.Tree.Internal
 import qualified Crypto.Data.Auth.Tree.Proof as Tree
-import           Crypto.Hash (SHA256)
+import qualified Crypto.Hash as Cryptonite
+
+import qualified Data.Digest.XXHash as Mock
 
 type Key = Word8
 type Val = Word8
+
+type CryptoniteDigest = Cryptonite.Digest Cryptonite.SHA256
+type MockDigest       = Mock.XXHash
+
+instance MerkleHash (Cryptonite.Digest Cryptonite.SHA256) where
+    emptyHash     = Cryptonite.emptyHash
+    hashLeaf      = Cryptonite.hashLeaf
+    concatHashes  = Cryptonite.concatHashes
+
+instance MerkleHash MockDigest where
+    emptyHash          = minBound
+    hashLeaf k v       = Mock.xxHash' (convert k <> convert v)
+    concatHashes d1 d2 = d1 + d2
 
 instance MonadFail Gen where
     fail = error
@@ -43,26 +65,31 @@ instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Tree.Tree k v) where
         updates inserts deletes = [Tree.delete k   |  k     <- deletes]
                                ++ [Tree.insert k v | (k, v) <- inserts]
 
+
 tests :: TestTree
-tests = localOption (QuickCheckTests 100) $ testGroup "Crypto"
-    [ testProperty    "Insert/Lookup"          propInsertLookup
-    , testProperty    "Insert/Member"          propInsertMember
-    , testProperty    "Delete/Member"          propDelete
-    , testProperty    "Invariant"              propInvariant
-    , testProperty    "Sorted"                 propSorted
-    , testProperty    "List From/To"           propList
-    , testProperty    "Inner nodes"            propInnerNodes
-    , testProperty    "AVL-balanced"           propBalanced
-    , testProperty    "Proofs"                 propProofVerify
-    , testProperty    "More proofs"            propProofNotVerify
-    , testProperty    "Absence proofs"         propProofAbsenceNotVerify
-    , testProperty    "Pred/Succ"              propPredSucc
-    , testProperty    "First"                  propFirst
-    , testProperty    "Last"                   propLast
-    , testProperty    "Size"                   propSize
-    , testProperty    "Succ"                   propSucc
-    , testCase        "Union"                  testUnion
-    , testCase        "Empty tree Proof"       testEmptyTreeProof
+tests = testGroup "Crypto"
+    [ testProperty    "Insert/Lookup"                 propInsertLookup
+    , testProperty    "Insert/Member"                 propInsertMember
+    , testProperty    "Delete/Member"                 propDelete
+    , testProperty    "Invariant"                     propInvariant
+    , testProperty    "Sorted"                        propSorted
+    , testProperty    "List From/To"                  propList
+    , testProperty    "Inner nodes"                   propInnerNodes
+    , testProperty    "AVL-balanced"                  propBalanced
+    , testProperty    "Proofs (cryptonite)"           (propProofVerify @CryptoniteDigest)
+    , testProperty    "Proofs (mock)"                 (propProofVerify @MockDigest)
+    , testProperty    "More proofs (cryptonite)"      (propProofNotVerify @CryptoniteDigest)
+    , testProperty    "More proofs (mock)"            (propProofNotVerify @MockDigest)
+    , testProperty    "Absence proofs (cryptonite)"   (propProofAbsenceNotVerify @CryptoniteDigest)
+    , testProperty    "Absence proofs (mock)"         (propProofAbsenceNotVerify @MockDigest)
+    , testProperty    "Pred/Succ"                     propPredSucc
+    , testProperty    "First"                         propFirst
+    , testProperty    "Last"                          propLast
+    , testProperty    "Size"                          propSize
+    , testProperty    "Succ"                          propSucc
+    , testCase        "Union"                         testUnion
+    , testCase        "Empty tree Proof (cryptonite)" (testEmptyTreeProof (Proxy @CryptoniteDigest))
+    , testCase        "Empty tree Proof (Mock)"       (testEmptyTreeProof (Proxy @MockDigest))
     ]
 
 main :: IO ()
@@ -128,23 +155,35 @@ testUnion =
     t2 = Tree.fromList [('a', 2), ('d', 2)]
 
 -- | Valid proofs of key existence verify positively.
-propProofVerify :: Tree Key Val -> Key -> Val -> Bool
-propProofVerify tree' k v | tree <- Tree.insert k v tree'
+propProofVerify
+    :: forall h. (MerkleHash h, Eq h)
+    => Proxy h
+    -> Tree Key Val
+    -> Key
+    -> Val
+    -> Bool
+propProofVerify Proxy tree' k v | tree <- Tree.insert k v tree'
                           , root <- Tree.merkleHash tree =
-    case Tree.lookupProof @SHA256 k tree of
+    case Tree.lookupProof @h k tree of
         (Just val, proof) -> isRight (Tree.verify proof root k (Just val))
         _                 -> False
 
 -- | Valid proofs of key existence against the wrong key verify negatively.
-propProofNotVerify :: Tree Key Val -> Key -> Val -> Gen Bool
-propProofNotVerify tree k v = do
+propProofNotVerify
+    :: forall h. (MerkleHash h, Eq h)
+    => Proxy h
+    -> Tree Key Val
+    -> Key
+    -> Val
+    -> Gen Bool
+propProofNotVerify Proxy tree k v = do
     ks <- arbitrary :: Gen [Key]
 
     -- Add a set of additional keys to the tree with the same value `v`.
     let t = Tree.union tree (Tree.fromList $ (k, v) : [(k', v) | k' <- ks])
     let root = Tree.merkleHash t
 
-    pure $ case Tree.lookupProof @SHA256 k t of
+    pure $ case Tree.lookupProof @h k t of
         (Just _, proof) ->
             all isLeft [ Tree.verify proof root k' (Just v')
                        | (k', v') <- Tree.toList t
@@ -152,15 +191,15 @@ propProofNotVerify tree k v = do
         _ ->
             False
 
-data TreeTest k v = TreeTest
+data TreeTest h k v = TreeTest
     { tTree           :: Tree k v
     , tExistsKeyVal   :: (k, v)
     , tAbsentKey      :: k
-    , tKeyExistsProof :: Tree.Proof SHA256 k v
-    , tKeyAbsentProof :: Tree.Proof SHA256 k v
-    } deriving (Eq)
+    , tKeyExistsProof :: Tree.Proof h k v
+    , tKeyAbsentProof :: Tree.Proof h k v
+    } deriving Eq
 
-instance (Show k, Show v) => Show (TreeTest k v) where
+instance (Show h, Show k, Show v) => Show (TreeTest h k v) where
     show TreeTest{..} =
         unlines [ show tTree
         , "exists=" ++ show tExistsKeyVal
@@ -176,7 +215,8 @@ instance ( ByteArrayAccess k
          , Arbitrary k
          , Arbitrary v
          , Ord k
-         ) => Arbitrary (TreeTest k v) where
+         , MerkleHash h
+         ) => Arbitrary (TreeTest h k v) where
     arbitrary = do
         -- Create a non-empty tree.
         tree <- arbitrary `suchThat` (not . Tree.null) :: Gen (Tree k v)
@@ -191,8 +231,12 @@ instance ( ByteArrayAccess k
         -- Return a TreeTest object with all of the above.
         pure $ TreeTest tree (present, v) absent existsProof absentProof
 
-propProofAbsenceNotVerify :: TreeTest Key Val -> Gen Bool
-propProofAbsenceNotVerify TreeTest{..} = pure $
+propProofAbsenceNotVerify
+    :: forall h. (MerkleHash h, Eq h)
+    => Proxy h
+    -> TreeTest h Key Val
+    -> Gen Bool
+propProofAbsenceNotVerify Proxy TreeTest{..} = pure $
     and [ isRight $ Tree.verify tKeyAbsentProof root tAbsentKey          Nothing
         , isLeft  $ Tree.verify tKeyAbsentProof root (fst tExistsKeyVal) Nothing
         , isRight $ Tree.verify tKeyExistsProof root (fst tExistsKeyVal) (Just (snd tExistsKeyVal))
@@ -201,9 +245,12 @@ propProofAbsenceNotVerify TreeTest{..} = pure $
   where
     root = Tree.merkleHash tTree
 
-testEmptyTreeProof :: Assertion
-testEmptyTreeProof =
-    case Tree.lookupProof @SHA256 @Key @Val 1 Tree.empty of
+testEmptyTreeProof
+    :: forall h. (MerkleHash h, Eq h)
+    => Proxy h
+    -> Assertion
+testEmptyTreeProof Proxy =
+    case Tree.lookupProof @h @Key @Val 1 Tree.empty of
         (Nothing, proof) -> Tree.verify proof Tree.emptyHash 1 Nothing @?= Right ()
         _                -> assertFailure "Key was found in empty tree"
 

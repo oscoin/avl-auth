@@ -2,7 +2,6 @@ module Crypto.Data.Auth.Tree.Proof where
 
 import           Crypto.Data.Auth.Tree
 import           Crypto.Data.Auth.Tree.Internal
-import           Crypto.Hash (Digest, HashAlgorithm)
 import           Data.ByteArray (ByteArrayAccess)
 import           Data.List (intercalate)
 import qualified Data.List as List
@@ -35,12 +34,12 @@ instance (Show d, Show a) => Show (Path d a) where
             , intercalate "\n" (fmap show es)
             ]
 
-data PathElem d =
-      L (Digest d)
-    | R (Digest d)
+data PathElem h =
+      L h
+    | R h
     deriving (Show, Eq)
 
-adjacent :: [PathElem a] -> [PathElem a] -> Bool
+adjacent :: Eq a => [PathElem a] -> [PathElem a] -> Bool
 adjacent l' r' =
     isRightmost l && isLeftmost r
   where
@@ -48,7 +47,7 @@ adjacent l' r' =
 
 -- | If the given paths have a common prefix branch, return them without
 -- the path elements in common.
-stripCommonPrefix :: [PathElem a] -> [PathElem a] -> ([PathElem a], [PathElem a])
+stripCommonPrefix :: Eq a => [PathElem a] -> [PathElem a] -> ([PathElem a], [PathElem a])
 stripCommonPrefix (reverse -> ls') (reverse -> rs') =
     let (l', r') = go ls' rs' in
         ( reverse l'
@@ -71,19 +70,19 @@ isRightmost []         = True
 isRightmost _          = False
 
 pathDigest
-    :: (ByteArrayAccess k, ByteArrayAccess v, HashAlgorithm a)
-    => [PathElem a] -> k -> v -> Digest a
+    :: (MerkleHash h, ByteArrayAccess k, ByteArrayAccess v)
+    => [PathElem h] -> k -> v -> h
 pathDigest elems k v =
     List.foldl' (flip digest) (hashLeaf k v) elems
   where
-    digest (L l) r = hashNode l r
-    digest (R r) l = hashNode l r
+    digest (L l) r = concatHashes l r
+    digest (R r) l = concatHashes l r
 
 -- | Verify a proof.
 verify
-    :: (HashAlgorithm a, Ord k, ByteArrayAccess k, ByteArrayAccess v)
-    => Proof a k v       -- ^ The proof to verify.
-    -> Digest a          -- ^ The root hash.
+    :: (MerkleHash h, Eq h, Ord k, ByteArrayAccess k, ByteArrayAccess v)
+    => Proof h k v       -- ^ The proof to verify.
+    -> h                 -- ^ The root hash.
     -> k                 -- ^ The key to verify.
     -> Maybe v           -- ^ The value to verify in case of a proof of existence.
     -> Either Error ()   -- ^ A 'Right' value signifies success.
@@ -118,10 +117,10 @@ assert True  _   = Right ()
 assert False err = Left err
 
 lookupProof
-    :: (HashAlgorithm a, Ord k, ByteArrayAccess k, ByteArrayAccess v)
+    :: (MerkleHash h, Ord k, ByteArrayAccess k, ByteArrayAccess v)
     => k
     -> Tree k v
-    -> (Maybe v, Proof a k v)
+    -> (Maybe v, Proof h k v)
 lookupProof key tree =
     f key tree []
   where
@@ -135,7 +134,7 @@ lookupProof key tree =
         (Nothing, KeyAbsentProof Nothing Nothing)
 {-# INLINABLE lookupProof #-}
 
-keyAbsentProof :: (HashAlgorithm a, ByteArrayAccess k, ByteArrayAccess v, Ord k) => k -> Tree k v -> Proof a k v
+keyAbsentProof :: (MerkleHash h, ByteArrayAccess k, ByteArrayAccess v, Ord k) => k -> Tree k v -> Proof h k v
 keyAbsentProof k tree =
     KeyAbsentProof left right
   where

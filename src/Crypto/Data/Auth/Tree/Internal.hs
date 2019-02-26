@@ -1,11 +1,11 @@
 module Crypto.Data.Auth.Tree.Internal where
 
+import           Data.Kind
+
 import           Prelude
 
 import           Crypto.Hash
-                 ( Digest
-                 , HashAlgorithm
-                 , digestFromByteString
+                 ( digestFromByteString
                  , hashDigestSize
                  , hashFinalize
                  , hashInit
@@ -17,25 +17,18 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import           Data.Maybe (fromJust)
 
-hashLeaf
-    :: (HashAlgorithm a, ByteArrayAccess k, ByteArrayAccess v)
-    => k -> v -> Digest a
-hashLeaf k v =
-    hashFinalize $ flip hashUpdate v
-                 $ flip hashUpdate k
-                 $ flip hashUpdate (BS.singleton 0)
-                 $ hashInit
-hashNode
-    :: HashAlgorithm a
-    => Digest a -> Digest a -> Digest a
-hashNode l r =
-    hashFinalize $ flip hashUpdates [l, r]
-                 $ flip hashUpdate (BS.singleton 1)
-                 $ hashInit
+-- | A typeclass abstracting over the particular hashing function (and
+-- digest) used in the Merkle Tree.
+class MerkleHash h where
+    emptyHash :: h
 
-emptyHash :: forall a. HashAlgorithm a => Digest a
-emptyHash =
-    fromJust $ digestFromByteString (zero n :: ByteString)
-  where
-    n = hashDigestSize (undefined :: a)
+    -- | Given a key and a value, hash them to produce a leaf.
+    -- NOTE: It's up to the implementer of a particular instance to deal with
+    -- security concerns and make sure this implementation is not subject to
+    -- attacks. The 'Cryptonite' implementation takes care of this already,
+    -- but new instances should be implemened with this in mind.
+    hashLeaf :: forall k v. (ByteArrayAccess k, ByteArrayAccess v) => k -> v -> h
 
+    -- | Hashes two nodes together, concatenating their hashes to produce a
+    -- new one. Same security concerns of 'hashLeaf' applies.
+    concatHashes :: h -> h -> h
