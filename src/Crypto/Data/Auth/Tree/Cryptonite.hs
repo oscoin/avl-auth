@@ -1,6 +1,6 @@
 module Crypto.Data.Auth.Tree.Cryptonite
     ( hashLeaf
-    , hashNode
+    , concatHashes
     , emptyHash
     ) where
 
@@ -30,10 +30,10 @@ hashLeaf k v =
                  $ flip hashUpdate k
                  $ flip hashUpdate (BS.singleton 0)
                  $ hashInit
-hashNode
+concatHashes
     :: HashAlgorithm a
     => Digest a -> Digest a -> Digest a
-hashNode l r =
+concatHashes l r =
     hashFinalize $ flip hashUpdates [l, r]
                  $ flip hashUpdate (BS.singleton 1)
                  $ hashInit

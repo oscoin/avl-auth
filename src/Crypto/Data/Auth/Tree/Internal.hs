@@ -25,10 +25,10 @@ class MerkleHash h where
     -- | Given a key and a value, hash them to produce a leaf.
     -- NOTE: It's up to the implementer of a particular instance to deal with
     -- security concerns and make sure this implementation is not subject to
-    -- attocks. The 'Crypnonite' implementation takes care of this already,
+    -- attacks. The 'Cryptonite' implementation takes care of this already,
     -- but new instances should be implemened with this in mind.
     hashLeaf :: forall k v. (ByteArrayAccess k, ByteArrayAccess v) => k -> v -> h
 
-    -- | Hashes two nodes together, producing a new one. Same security
-    -- concerns of 'hashLeaf' applies.
-    hashNode :: h -> h -> h
+    -- | Hashes two nodes together, concatenating their hashes to produce a
+    -- new one. Same security concerns of 'hashLeaf' applies.
+    concatHashes :: h -> h -> h

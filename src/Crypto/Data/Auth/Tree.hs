@@ -93,7 +93,7 @@ merkleHash
     -> h
 merkleHash Empty        = emptyHash
 merkleHash (Leaf k v)   = hashLeaf k v
-merkleHash (Node _ l r) = hashNode (merkleHash l) (merkleHash r)
+merkleHash (Node _ l r) = concatHashes (merkleHash l) (merkleHash r)
 
 -------------------------------------------------------------------------------
 

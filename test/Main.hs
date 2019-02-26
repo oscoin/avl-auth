@@ -36,17 +36,17 @@ type Key = Word8
 type Val = Word8
 
 type CryptoniteDigest = Cryptonite.Digest Cryptonite.SHA256
-type MockDigest      = Mock.XXHash
+type MockDigest       = Mock.XXHash
 
 instance MerkleHash (Cryptonite.Digest Cryptonite.SHA256) where
-    emptyHash = Cryptonite.emptyHash
-    hashLeaf  = Cryptonite.hashLeaf
-    hashNode  = Cryptonite.hashNode
+    emptyHash     = Cryptonite.emptyHash
+    hashLeaf      = Cryptonite.hashLeaf
+    concatHashes  = Cryptonite.concatHashes
 
 instance MerkleHash MockDigest where
-    emptyHash      = minBound
-    hashLeaf k v   = Mock.xxHash' (convert k <> convert v)
-    hashNode d1 d2 = d1 + d2
+    emptyHash          = minBound
+    hashLeaf k v       = Mock.xxHash' (convert k <> convert v)
+    concatHashes d1 d2 = d1 + d2
 
 instance MonadFail Gen where
     fail = error

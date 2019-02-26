@@ -75,8 +75,8 @@ pathDigest
 pathDigest elems k v =
     List.foldl' (flip digest) (hashLeaf k v) elems
   where
-    digest (L l) r = hashNode l r
-    digest (R r) l = hashNode l r
+    digest (L l) r = concatHashes l r
+    digest (R r) l = concatHashes l r
 
 -- | Verify a proof.
 verify
