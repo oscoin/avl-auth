@@ -25,8 +25,8 @@ import           Test.Tasty.QuickCheck
 
 import           Crypto.Data.Auth.Tree (Tree)
 import qualified Crypto.Data.Auth.Tree as Tree
+import           Crypto.Data.Auth.Tree.Class
 import qualified Crypto.Data.Auth.Tree.Cryptonite as Cryptonite
-import           Crypto.Data.Auth.Tree.Internal
 import qualified Crypto.Data.Auth.Tree.Proof as Tree
 import qualified Crypto.Hash as Cryptonite
 
