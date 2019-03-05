@@ -22,7 +22,7 @@ library
       Crypto.Data.Auth.Tree
       Crypto.Data.Auth.Tree.Proof
       Crypto.Data.Auth.Tree.Cryptonite
-      Crypto.Data.Auth.Tree.Internal
+      Crypto.Data.Auth.Tree.Class
   hs-source-dirs:
       src
   build-depends:

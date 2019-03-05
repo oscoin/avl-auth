@@ -33,7 +33,7 @@ module Crypto.Data.Auth.Tree
     , balance
     ) where
 
-import           Crypto.Data.Auth.Tree.Internal
+import           Crypto.Data.Auth.Tree.Class
 
 import           Data.Binary (Binary)
 import           Data.ByteArray (ByteArrayAccess)

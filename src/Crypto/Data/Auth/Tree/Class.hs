@@ -1,6 +1,4 @@
-module Crypto.Data.Auth.Tree.Internal where
-
-import           Data.Kind
+module Crypto.Data.Auth.Tree.Class where
 
 import           Prelude
 

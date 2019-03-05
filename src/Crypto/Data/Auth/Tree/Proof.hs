@@ -1,7 +1,7 @@
 module Crypto.Data.Auth.Tree.Proof where
 
 import           Crypto.Data.Auth.Tree
-import           Crypto.Data.Auth.Tree.Internal
+import           Crypto.Data.Auth.Tree.Class
 import           Data.ByteArray (ByteArrayAccess)
 import           Data.List (intercalate)
 import qualified Data.List as List
