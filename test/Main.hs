@@ -10,6 +10,7 @@ import           Data.ByteArray (ByteArrayAccess(..), convert)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import           Data.Either (isLeft, isRight)
+import           Data.Hashable (hash)
 import           Data.Kind
 import           Data.List (sort)
 import           Data.List.NonEmpty (NonEmpty, toList)
@@ -30,13 +31,13 @@ import qualified Crypto.Data.Auth.Tree.Cryptonite as Cryptonite
 import qualified Crypto.Data.Auth.Tree.Proof as Tree
 import qualified Crypto.Hash as Cryptonite
 
-import qualified Data.Digest.XXHash as Mock
+import qualified Data.Digest.XXHash.FFI as Mock
 
 type Key = Word8
 type Val = Word8
 
 type CryptoniteDigest = Cryptonite.Digest Cryptonite.SHA256
-type MockDigest       = Mock.XXHash
+type MockDigest       = Word64
 
 instance MerkleHash (Cryptonite.Digest Cryptonite.SHA256) where
     emptyHash     = Cryptonite.emptyHash
@@ -44,8 +45,8 @@ instance MerkleHash (Cryptonite.Digest Cryptonite.SHA256) where
     concatHashes  = Cryptonite.concatHashes
 
 instance MerkleHash MockDigest where
-    emptyHash          = minBound
-    hashLeaf k v       = Mock.xxHash' (convert k <> convert v)
+    emptyHash          = 0
+    hashLeaf k v       = fromIntegral $ hash $ Mock.XXH3 @ByteString (convert k <> convert v)
     concatHashes d1 d2 = d1 + d2
 
 instance MonadFail Gen where
